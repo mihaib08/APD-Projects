@@ -4,6 +4,12 @@ Barbu Mihai-Eugen, 335CA [2021]
 
 ----
 
+## Overview
+
+The aim of this project is to provide a parallel implementation of a _genetic_ algorithm used for solving the __knapsack__ problem (0-1).
+
+The sequential algorithm is in ```skel/```. The __parallel__ solution is in ```sol/```.
+
 ## Implementation
 
 Using the sources in ```skel/``` as starting point, the following structure is used for _dividing_ the computations on each __thread__:
@@ -16,7 +22,7 @@ Using the sources in ```skel/``` as starting point, the following structure is u
     - object_count / *objects
     - sack_capacity
 
-    - P - no. de threads
+    - P - no. threads
     - *barrier - **pointer** to the barrier used
                  for thread synchronization
     
@@ -32,7 +38,7 @@ Therefore, the function _thread\_genetic()_ is used for processing each _generat
 
 - **barrier** is used for thread synchronization in the following situations:
 
-    - arrays' initialization
+    - initialization of the arrays (_current\_generation_, _next\_generation_)
     - _current\_generation_ parallel sort
     - calculus for getting a new generation
 
