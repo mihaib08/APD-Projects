@@ -1,0 +1,130 @@
+/**
+ * Mihai-Eugen Barbu
+ * 335CA [2021-2022]
+ */
+
+== APD - Tema 2 - Map-Reduce ==
+
+<> Pachete
+
+    Am realizat implementarea functionalitatii de Map-Reduce
+    impartind proiectul in urmatoarele pachete:
+
+    > <default> - contine clasa din schelet - Tema2 -
+                  reprezentand thread-ul de executie coordonator
+
+                - contine clasa MRThread, care rezolva task-urile
+                  de tip Map, respectiv Reduce, asignate unui thread
+
+    > map/ - implementeaza logica de Map
+
+    > reduce/ - implementeaza logica de Reduce
+
+    > utils/ - contine clasa Rank, implementand rangul unui document
+               folosind sirul lui Fibonacci
+
+        ^ pentru aflarea numarului corespunzator unei lungimi,
+          se calculeaza in timp _logaritmic_ termenul din sirul
+          lui Fibonacci
+
+    Pornind de la aceasta divizare, pachetele caracteristice
+    map/ si reduce/ contin clase de forma:
+
+    @Task - contine campuri specifice pentru
+            rezolvarea unui task -> solveTask()
+
+    @Result - clasa care agrega campurile specifice
+              unui rezultat din @Task
+
+    >> in plus, clasa @Results din pachetul map/ realizeaza
+       _agregarea_ rezultatelor din task-urile de Map in functie de
+       document (i.e. HashMap), fiind utile pentru task-urile de Reduce
+
+-----------------------------------------------------------------------------------
+
+<> Implementare
+
+    Dupa preluarea argumentelor specifice fisierului de intrare
+    se creeaza entitatile corespunzatoare task-urilor,
+    folosind campurile:
+
+    ~ docs - lista care contine caile catre fisierele de intrare
+    ~ docNames - lista care contine denumirile fisierelor
+                                    ^ extrase din path-ul catre un fisier
+
+    Task-urile create sunt retinute folosind liste (<map/reduce>Tasks),
+    generarea unui task realizandu-se prin urmatorii parametri:
+
+    % Map (in metoda genDocumentTasks())
+
+          - numele documentului (name)
+          - offsetul de inceput al fragmentului specific task-ului
+
+          - dimensiunea fragmentului
+
+          ^ pentru a se evita problema despartirii unui cuvant intre doua
+            thread-uri, se verifica ultimul caracter al fragmentului curent,
+                           respectiv primul caracter al fragmentului urmator,
+
+            iar in cazul in care ambele sunt elemente alfanumerice, se preia
+            se *mareste* dimensiunea pentru task-ul curent pentru a prelua
+            si caracterele cuvantului care se afla in urmatorul task
+
+          ^^ se va micsora dimensiunea alocata pentru fragmentul urmator
+
+          - (RandomAccessFile) raf - obiectul care permite citirea de la
+            offset-ul corespunzator task-ului
+
+          ^ acelasi pentru task-urile apartinand aceluiasi document (1)
+
+    % Reduce (in main())
+
+          - numele documentului (name)
+          - lista de rezultate data de Map (folosind clasa Results)
+          - id-ul task-ului (util pentru cazurile de egalitate de rang)
+
+------------------------------------------------------------------------------------
+
+<> Paralelizare
+
+    Fiecare thread are asociata o lista de task-uri de tip Map,
+                               respectiv o lista pentru Reduce,
+    rezolvandu-se intai cele de tipul Map.
+
+    > De asemenea, exista posibilitatea ca pentru un document sa se fi executat
+      toate task-urile de tip Map, astfel ca daca thread-ul asociat acelui document
+      pentru etapa de Reduce a terminat de executat toate task-urile de tip Map,
+      sa poata executa task-ul de Reduce specific. (*)
+
+------------------------------------------------------------------------------------
+
+<> Sincronizare
+
+    Tinand cont de (1), la rezolvarea unui task se sincronizeaza
+    metoda solveTask() din clasa MapTask pentru a nu exista race condition
+    pe file-pointer in urma operatiei de seek()
+
+    Pentru a implementa (*), am cate un semafor specific fiecarui document
+    (i.e. semaphoreMap[docName]) acesta fiind adaugat in definitiile claselor de MapTask
+    si ReduceTask.
+
+    > se initializeaza cu (-numar_task-uri_document + 1)
+    >> dupa rezolvarea unui task de Map --> release()
+    >> la intrarea intr-un task de Reduce --> acquire()
+    ===============================================================
+    >>> nu se va putea rezolva task-ul de Reduce corespunzator
+        unui document daca nu s-au rezolvat toate task-urile de Map
+
+------------------------------------------------------------------------------------
+
+# Obs. 
+-------
+
+    - nu sunt sigur daca utilizarea de semafoare scaleaza mai bine pentru testele date
+      fata de asigurarea terminarii tuturor task-urilor de Map,
+                                   urmata de task-urile de Reduce,
+      
+      dar am considerat ca este un exercitiu folositor a
+      sincroniza cele doua tipuri de task-uri in acest mod
+
+
