@@ -1,128 +1,95 @@
-# APD - Tema 3 - Calcule colaborative in sisteme distribuite
+# APD - Computations in Distributed Systems
 
 Barbu Mihai-Eugen, 335CA [2021-2022]
 
+## Overview
+
+The aim of this project is to __distribute__ the calculus in a _cluster_-like system, where each __coordinator__ has a number of __workers__ assigned to it, each of the workers having to compute a _chunk_ of an array. Therefore, the calculus need to be distributed as balanced as possible between the workers, in order to ensure the __scalability__ of the system.
+
 ----
 
-## Implementare
+## Implementation
 
-- _tema3.cpp_ - fiecare proces contine variabilele:
-    - `rank` - rangul procesului
-    - `numTasks` - numarul de procese
-    - `(std::vector<int *>) clusters` - informatiile legate
-        de clustere (pentru aflarea topologiei)
-        - fiecare element contine structura unui cluster
+All sources are in _sol/_:
 
-- _utils.cpp_ - contine functiile:
-    - `getTopology()` - afiseaza in terminal topologia
-                        corespunzatoare din ``clusters``
-    - `displayMessage()` - mesajul logat in terminal
-                           pentru fiecare operatie `MPI_Send()`
+- _tema3.cpp_ - each process has the variables:
+    - `rank` - rank of the process
+    - `numTasks` - no. processes
+    - `(std::vector<int *>) clusters` - data of each cluster
+        - each element contains the information of a cluster
 
-- _coordinator.cpp_ - contine functiile realizate de coordonatori,
-                      in functie de prezenta
-                      erorii de comunicatie (0/1):
+- _utils.cpp_
+    - `getTopology()` - displays the topology using the data from ``clusters``
+    - `displayMessage()` - message being displayed for each `MPI_Send()`
+
+- _coordinator.cpp_ - defines the computations done by each coordinator, depending on the communication error (0/1):
     - `findTopology()`
-    / `bonusTopology()` - aflarea topologiei
-                          sistemului distribuit
+    / `bonusTopology()` - finds the topology of the entire system
 
     - `rootCompute()`
-    / `rootBonusCompute()` - impartirea calculelor de la
-                             procesul cu `rank = 0` catre
-                             celelalte procese coordonator
+    / `rootBonusCompute()` - divides the computations from the process w/ ```rank = 0``` to the other __connected__ processes
 
     - `coordinatorCompute()`
     / `coordinator{1,2}Compute`
-            - distribuirea calculelor de catre
-              procesele coordonator cu $rank \in \{1,2\}$.
+            - divides the computations for the other coordinators (having the $rank \in \{1,2\}$)
 
-## Rezolvarea cerintelor
+## Operations
 
-#### 1. Stabilirea topologiei
+#### 1. Topology
 
-Fiecare proces coordonator citeste datele
-din fisierul corespunzator,
-dupa care creeaza clusterul `(int *) curr`
-urmarindu-se regula stabilita:
-- curr[0] - rangul coordonatorului
-- curr[1] - numarul de procese worker
-- curr[2..] - rangurile proceselor worker
+Each __coordinator__ processes the data given in its input file, then it generates the cluster ```(int *) curr``` as follows:
+- curr[0] - coordinator rank
+- curr[1] - no. _workers_
+- curr[2..] - workers' ranks
 
-Fiecare coordonator trimite celorlalti doi
-informatiile clusterului sau (0 -> 1,2; 1 -> 0,2; 2 -> 0,1).
+Each coordinator sends the cluster data to the other coordinators (0 -> 1,2; 1 -> 0,2; 2 -> 0,1).
 
-Dupa ce fiecare **coordonator** cunoaste
-intreaga _topologie_, aceasta este trimisa
-mai departe proceselor de tip **worker** aferente.
+When each **coordinator** finds the entire _topology_, it is sent to the corresponding **workers**.
 
-#### 2. Realizarea calculelor
+#### 2. Computations
 
-Procesul cu `rank = 0` (_rootCompute()_)
-_trimite_ numarul de elemente ale vectorului de procesat
-celorlalte procese coordonator, genereaza vectorul
-conform enuntului, dupa care:
+The first coordinator, i.e. w/ `rank = 0` (_rootCompute()_), _sends_ the number of elements of the array that has to be computed, generates the array, then:
 
-1. se stabilesc limitele de calcul pentru procesele worker
-2. pornind de la limita _superioara_ asignata ultimului proces worker,
-   se trimit catre ceilalti coordonatori
-   limitele inferioare pentru clusterele lor
+1. computes the boundaries for each of its __workers__
+2. divides the calculus for the other coordinators:
 
-    - `0` ii trimite lui `1` partea sa superioara,
-      `1` trimite catre `0` partea sa superioara,
-      aceasta fiind transmisa de `0` catre procesul `2`
+    - `0` sends to `1` its upper limit,
+      `1` sends to `0` its upper limit,
+      the latter being sent from `0` to `2`
 
-3. trimite partile corespunzatoare de calculat
-   catre workeri si ceilalti coordonatori
-4. se asteapta rezultatele de la procesele worker
-   si de la ceilalti coordonatori
+3. divides the array depending on these boundaries and sends each chunk to the workers and coordinators as previously assigned
+4. waits (`MPI_RECV()`) to receive the results from the other workers and coordinators
 
-Procesele coordonator `1` si `2` (_coordinatorCompute()_) primesc
-`N` = numarul de elemente ale vectorului de procesat,
-cat si limitele de start pentru asignarea
-proceselor worker din cluster, dupa care:
+The other coordinators - `1`, `2` (_coordinatorCompute()_) - receive `N` = size of the array,
+as well as the _lower_ limit assigned to them, then each:
 
-1. se stabilesc limitele de calcul pentru procesele worker
-2. se trimit limitele superioare ale clusterului
-3. se primeste portiunea din vector alocata clusterului,
-   dupa care se imparte conform limitelor stabilite
-   la punctul 1 catre workeri
-4. se asteapta rezultatele de la procesele worker
-   si se trimit catre coordonatorul `0`
+1. computes the boundaries for each of its __workers__
+2. sends the upper limit back to `0`
+3. receives the subarray assigned to it and divides it for the __workers__
+4. waits for the results from the workers and sends them to `0`
 
-#### 4. Tratarea defectelor pe canalul de comunicatie
+#### 3. Fault tolerance
 
-In cazul absentei legaturii `(0, 1)`, am considerat ca procesul `0`
-va realiza comunicarea cu procesul `1` prin intermediul procesului `2`.
-Astfel, comunicarea `0 <-> 1` devine `0 <-> 2 <-> 1`.
+When the `(0, 1)` link is not available, `0` will communicate with `1` _through_ `2`.
 
-In acest mod, stabilirea topologiei se realizeaza astfel:
+Therefore, the communication `0 <-> 1` becomes `0 <-> 2 <-> 1`.
 
-- procesele `0` si `1` trimit informatiile legate de
-  clusterele sale catre `2`, dupa care
-  coordonatorul `2` va trimite datele despre:
-    - clusterele `0` si `2` catre procesul `1`
-    - clusterele `1` si `2` catre procesul `0`
+This way, the topology will be found as follows:
 
-- procesele coordonator transmit topologia catre
-  procesele worker
+- `0` and `1` send their data to `2`, then `2` sends the data regarding:
+    - clusters `0` and `2` -> `1`
+    - clusters `1` and `2` -> `0`
 
-Pentru **realizarea calculelor**, procesul `0`
-va trimite `v[curr..]` catre procesul `2`, unde
-`curr` - limita superioara asignata proceselor worker
-din clusterul `0`, dupa care `v[curr..]` va fi partitionat
-intre procesele `1` si `2`.
+- each coordinator sends the topology to the workers assigned to it
+
+As for the computation of the array, `0` sends `v[curr..]` to `2`, where `curr` - upper boundary assigned to the workers of `0`, then `2` divides the received array between itself and `1`.
 
 ----
 
 ### Obs.
 
-- pentru procesele worker se realizeaza initial
-  un `MPI_Recv()` avand parametrul **MPI_ANY_SOURCE**,
-  dupa care rangul coordonatorului este extras din status.
+- each __worker__ initially makes a call to `MPI_RECV()` using the parameter __MPI\_ANY\_SOURCE__, then it extracts the coordinator rank from the __status__ field
 
-- am folosit diverse tag-uri, in special la trimiterea
-  consecutiva a mesajelor, pentru diferentierea continutului
+- multiple tags are used for differentiating the content of the variables being sent across the system
 
-- procesele _worker_ au **aceeasi** implementare indiferent
-  de prezenta sau lipsa erorii de comunicatie, intrucat
-  ele comunica **doar** cu procesul lor coordonator
+- the __workers__ always have the same implementation, as they __only__ communicate with their coordinator
