@@ -2,6 +2,15 @@
 
 Mihai-Eugen Barbu, 335CA [2021-2022]
 
+## Overview
+
+The aim of this project is to __divide__ multiple documents and _process_ them using the __Map-Reduce__ paradigm by providing a _parallel_ solution of this approach.
+
+This way, a list of _Map_ tasks and one of _Reduce_ tasks are assigned to a thread:
+  - the _Map_ tasks provide <!-- a _histogram_-like list of results consisting of the words' length --> a list of results which are then passed to the _Reduce_ step
+
+  - the _Reduce_ tasks combine the results of the _Map_ tasks for a certain document and compute the __rank__ of the document
+
 ----
 
 ## Structure
